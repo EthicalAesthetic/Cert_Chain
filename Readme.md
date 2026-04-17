@@ -15,7 +15,6 @@
 - [API Endpoints](#api-endpoints)
 - [Smart Contract](#smart-contract)
 - [How It Works](#how-it-works)
-- [Screenshots](#screenshots)
 - [Important Note](#important-note)
 
 ---
