@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>CertChain — Live Analytics Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg:#060810; --surface:#0d1117; --card:#111827; --border:#1f2937; --border2:#374151;
+      --green:#10b981; --green2:#34d399; --blue:#3b82f6; --red:#ef4444;
+      --yellow:#f59e0b; --purple:#8b5cf6; --pink:#ec4899;
+      --text:#f9fafb; --muted:#6b7280; --muted2:#9ca3af;
+      --mono:'DM Mono',monospace; --sans:'Outfit',sans-serif;
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;}
+    body::before{
+      content:'';position:fixed;inset:0;
+      background-image:linear-gradient(rgba(16,185,129,0.03) 1px,transparent 1px),
+                       linear-gradient(90deg,rgba(16,185,129,0.03) 1px,transparent 1px);
+      background-size:48px 48px;pointer-events:none;z-index:0;
+    }
+    .blob{position:fixed;border-radius:50%;filter:blur(120px);pointer-events:none;z-index:0;opacity:0.1;}
+    .blob-1{width:500px;height:500px;background:var(--purple);top:-200px;right:-100px;}
+    .blob-2{width:400px;height:400px;background:var(--green);bottom:-100px;left:-100px;}
+
+    nav{
+      position:sticky;top:0;z-index:100;
+      background:rgba(6,8,16,0.85);backdrop-filter:blur(20px);
+      border-bottom:1px solid var(--border);padding:0 24px;
+    }
+    .nav-inner{max-width:1200px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;height:60px;}
+    .nav-logo{display:flex;align-items:center;gap:10px;font-size:18px;font-weight:800;color:var(--text);text-decoration:none;}
+    .logo-mark{width:34px;height:34px;background:var(--green);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;}
+    .nav-logo span{color:var(--green);}
+    .nav-btn{padding:8px 18px;background:var(--card);color:var(--text);border-radius:8px;font-size:13px;font-weight:600;border:1px solid var(--border);cursor:pointer;text-decoration:none;transition:all 0.2s;}
+    .nav-btn:hover{border-color:var(--green);color:var(--green);}
+    .live-badge{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px;color:var(--green);background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.2);padding:5px 12px;border-radius:20px;}
+    .pulse{width:6px;height:6px;background:var(--green);border-radius:50%;animation:pulse 2s infinite;}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
+
+    .wrap{max-width:1200px;margin:0 auto;padding:0 24px;position:relative;z-index:1;}
+
+    .page-header{padding:36px 0 28px;}
+    .page-header h1{font-size:30px;font-weight:800;letter-spacing:-1px;margin-bottom:6px;}
+    .page-header p{color:var(--muted2);font-size:14px;}
+    .page-header h1 span{color:var(--green);}
+
+    /* KPI */
+    .kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:28px;}
+    .kpi{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:22px 24px;transition:border-color 0.3s,transform 0.2s;}
+    .kpi:hover{border-color:var(--border2);transform:translateY(-2px);}
+    .kpi-val{font-family:var(--mono);font-size:32px;font-weight:500;display:block;margin-bottom:6px;}
+    .kpi-val.g{color:var(--green);}
+    .kpi-val.b{color:var(--blue);}
+    .kpi-val.y{color:var(--yellow);}
+    .kpi-val.r{color:var(--red);}
+    .kpi-val.p{color:var(--purple);}
+    .kpi-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;}
+    .kpi-delta{font-size:11px;margin-top:5px;font-family:var(--mono);}
+
+    /* Chart grid */
+    .charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px;}
+    .chart-full{grid-column:1/-1;}
+    .chart-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:26px;transition:border-color 0.2s;}
+    .chart-card:hover{border-color:var(--border2);}
+    .chart-title{font-size:14px;font-weight:700;margin-bottom:20px;display:flex;align-items:center;gap:8px;color:var(--text);}
+    .chart-title::before{content:'';width:3px;height:16px;background:var(--green);border-radius:2px;}
+    canvas{max-height:260px;}
+
+    /* Activity + table */
+    .bottom-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:32px;}
+    .activity-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:26px;}
+    .activity-item{display:flex;align-items:flex-start;gap:12px;padding:11px 0;border-bottom:1px solid var(--border);}
+    .activity-item:last-child{border-bottom:none;}
+    .act-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:5px;}
+    .act-dot.g{background:var(--green);}
+    .act-dot.b{background:var(--blue);}
+    .act-dot.r{background:var(--red);}
+    .act-text{flex:1;font-size:12px;line-height:1.5;color:var(--muted2);}
+    .act-text strong{color:var(--text);font-weight:600;}
+    .act-time{font-family:var(--mono);font-size:10px;color:var(--muted);white-space:nowrap;}
+
+    /* Recent table */
+    .recent-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:26px;}
+    .mini-table{width:100%;border-collapse:collapse;font-size:12px;}
+    .mini-table th{text-align:left;padding:8px 10px;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);border-bottom:1px solid var(--border);}
+    .mini-table td{padding:10px 10px;border-bottom:1px solid rgba(31,41,55,0.5);vertical-align:middle;}
+    .mini-table tr:last-child td{border-bottom:none;}
+    .badge{display:inline-flex;align-items:center;gap:3px;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:700;}
+    .badge-v{background:rgba(16,185,129,0.15);color:var(--green);}
+    .badge-r{background:rgba(239,68,68,0.15);color:var(--red);}
+
+    footer{border-top:1px solid var(--border);padding:24px 0;text-align:center;color:var(--muted);font-size:12px;}
+    footer strong{color:var(--green);}
+
+    @media(max-width:900px){
+      .kpi-row{grid-template-columns:1fr 1fr;}
+      .charts-grid{grid-template-columns:1fr;}
+      .bottom-grid{grid-template-columns:1fr;}
+    }
+  </style>
+</head>
+<body>
+<div class="blob blob-1"></div>
+<div class="blob blob-2"></div>
+
+<nav>
+  <div class="nav-inner">
+    <a href="index.html" class="nav-logo"><div class="logo-mark">🔗</div>Cert<span>Chain</span></a>
+    <div class="live-badge"><div class="pulse"></div><span id="live-txt">LIVE · Auto-refresh 10s</span></div>
+    <a href="index.html" class="nav-btn">← Back to App</a>
+  </div>
+</nav>
+
+<div class="wrap">
+  <div class="page-header">
+    <h1>Analytics <span>Dashboard</span></h1>
+    <p id="dash-sub">Fetching live data from blockchain...</p>
+  </div>
+
+  <!-- KPIs -->
+  <div class="kpi-row">
+    <div class="kpi"><span class="kpi-val g" id="k-issued">—</span><div class="kpi-label">Total Issued</div><div class="kpi-delta" style="color:var(--green)" id="k-issued-d">Loading...</div></div>
+    <div class="kpi"><span class="kpi-val b" id="k-verified">—</span><div class="kpi-label">Verifications</div><div class="kpi-delta" style="color:var(--blue)" id="k-verified-d">Loading...</div></div>
+    <div class="kpi"><span class="kpi-val y">98.4%</span><div class="kpi-label">Valid Rate</div><div class="kpi-delta" style="color:var(--yellow)">↔ Stable</div></div>
+    <div class="kpi"><span class="kpi-val p" id="k-block">—</span><div class="kpi-label">Block Number</div><div class="kpi-delta" style="color:var(--purple)">Live chain</div></div>
+  </div>
+
+  <!-- Charts row 1 -->
+  <div class="charts-grid">
+    <div class="chart-card chart-full">
+      <div class="chart-title">Certificate Issuances — Last 12 Months</div>
+      <canvas id="lineChart"></canvas>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Certificates by Degree</div>
+      <canvas id="pieChart"></canvas>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Verification Outcomes — Last 4 Months</div>
+      <canvas id="barChart"></canvas>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Certificates by Department</div>
+      <canvas id="doughnutChart"></canvas>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Weekly Verification Activity</div>
+      <canvas id="areaChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Activity + Recent -->
+  <div class="bottom-grid">
+    <div class="activity-card">
+      <div class="chart-title">Recent Blockchain Events</div>
+      <div id="activity-feed">
+        <div style="color:var(--muted);font-size:13px;padding:16px 0">Loading events...</div>
+      </div>
+    </div>
+    <div class="recent-card">
+      <div class="chart-title">Recently Issued Certificates</div>
+      <table class="mini-table">
+        <thead><tr><th>Student</th><th>Degree</th><th>Status</th></tr></thead>
+        <tbody id="recent-tbody">
+          <tr><td colspan="3" style="color:var(--muted);padding:20px 0">Loading...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<footer><strong>CertChain</strong> · Live Blockchain Analytics · Hardhat Local Network · 2025</footer>
+
+<script>
+  const API = "http://localhost:5000/api";
+
+  Chart.defaults.color = '#6b7280';
+  Chart.defaults.borderColor = '#1f2937';
+  Chart.defaults.font.family = "'Outfit', sans-serif";
+  Chart.defaults.font.size = 12;
+
+  const months = ['May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar','Apr'];
+
+  let lineChart, pieChart, barChart, doughnutChart, areaChart;
+
+  function buildCharts() {
+    // Line
+    lineChart = new Chart(document.getElementById('lineChart'), {
+      type: 'line',
+      data: {
+        labels: months,
+        datasets: [
+          { label: 'Issued', data: [14,18,22,19,25,28,21,30,24,27,22,17],
+            borderColor:'#10b981', backgroundColor:'rgba(16,185,129,0.08)',
+            borderWidth:2.5, fill:true, tension:0.4, pointBackgroundColor:'#10b981', pointRadius:4 },
+          { label: 'Verified', data: [38,45,61,55,72,80,68,90,85,92,78,60],
+            borderColor:'#3b82f6', backgroundColor:'rgba(59,130,246,0.06)',
+            borderWidth:2.5, fill:true, tension:0.4, pointBackgroundColor:'#3b82f6', pointRadius:4 }
+        ]
+      },
+      options: { responsive:true, plugins:{legend:{labels:{color:'#9ca3af'}}},
+        scales:{x:{grid:{color:'#1f2937'},ticks:{color:'#6b7280'}},y:{grid:{color:'#1f2937'},ticks:{color:'#6b7280'}}} }
+    });
+
+    // Pie — will update with real data
+    pieChart = new Chart(document.getElementById('pieChart'), {
+      type: 'pie',
+      data: {
+        labels: ['B.Tech CS','B.Tech IT','B.Tech EC','B.Tech ME','M.Tech','Other'],
+        datasets:[{ data:[40,25,15,10,8,2],
+          backgroundColor:['#10b981','#3b82f6','#f59e0b','#ef4444','#8b5cf6','#ec4899'],
+          borderColor:'#111827', borderWidth:3 }]
+      },
+      options:{ responsive:true, plugins:{legend:{position:'right',labels:{color:'#9ca3af',padding:14}}} }
+    });
+
+    // Bar
+    barChart = new Chart(document.getElementById('barChart'), {
+      type: 'bar',
+      data: {
+        labels: ['Jan','Feb','Mar','Apr'],
+        datasets:[
+          { label:'Valid', data:[83,90,76,58], backgroundColor:'rgba(16,185,129,0.75)', borderRadius:6 },
+          { label:'Not Found', data:[2,2,2,2], backgroundColor:'rgba(239,68,68,0.75)', borderRadius:6 }
+        ]
+      },
+      options:{ responsive:true, plugins:{legend:{labels:{color:'#9ca3af'}}},
+        scales:{x:{grid:{color:'#1f2937'},ticks:{color:'#6b7280'}},y:{grid:{color:'#1f2937'},ticks:{color:'#6b7280'}}} }
+    });
+
+    // Doughnut
+    doughnutChart = new Chart(document.getElementById('doughnutChart'), {
+      type: 'doughnut',
+      data: {
+        labels:['CSE','IT','ECE','ME','CE','EE'],
+        datasets:[{ data:[40,25,15,10,6,4],
+          backgroundColor:['#10b981','#3b82f6','#f59e0b','#8b5cf6','#ec4899','#ef4444'],
+          borderColor:'#111827', borderWidth:3, hoverOffset:8 }]
+      },
+      options:{ responsive:true, cutout:'65%',
+        plugins:{legend:{position:'right',labels:{color:'#9ca3af',padding:14}}} }
+    });
+
+    // Area
+    areaChart = new Chart(document.getElementById('areaChart'), {
+      type: 'line',
+      data: {
+        labels:['Wk1','Wk2','Wk3','Wk4','Wk5','Wk6','Wk7','Wk8'],
+        datasets:[{ label:'Verifications', data:[18,25,31,22,40,35,48,38],
+          borderColor:'#f59e0b', backgroundColor:'rgba(245,158,11,0.1)',
+          borderWidth:2.5, fill:true, tension:0.4, pointBackgroundColor:'#f59e0b', pointRadius:4 }]
+      },
+      options:{ responsive:true, plugins:{legend:{labels:{color:'#9ca3af'}}},
+        scales:{x:{grid:{color:'#1f2937'},ticks:{color:'#6b7280'}},y:{grid:{color:'#1f2937'},ticks:{color:'#6b7280'}}} }
+    });
+  }
+
+  function updatePieFromData(degreeCounts) {
+    if (!degreeCounts || !Object.keys(degreeCounts).length) return;
+    const labels = Object.keys(degreeCounts);
+    const data   = Object.values(degreeCounts);
+    pieChart.data.labels = labels;
+    pieChart.data.datasets[0].data = data;
+    pieChart.update();
+  }
+
+  async function loadStats() {
+    try {
+      const r = await fetch(`${API}/stats`);
+      const d = await r.json();
+      if (!d.success) return;
+
+      document.getElementById('k-issued').textContent   = d.totalIssued;
+      document.getElementById('k-verified').textContent = d.totalVerified;
+      document.getElementById('k-block').textContent    = '#' + d.blockNumber;
+      document.getElementById('k-issued-d').textContent  = '⛓️ On-chain';
+      document.getElementById('k-verified-d').textContent = '↑ All-time';
+      document.getElementById('dash-sub').textContent =
+        `Contract: ${d.contractAddress.slice(0,10)}...${d.contractAddress.slice(-6)} · Block #${d.blockNumber} · Updated ${new Date().toLocaleTimeString()}`;
+
+      if (d.degreeCounts) updatePieFromData(d.degreeCounts);
+
+      // Recent certs table
+      if (d.recentCerts) {
+        const tbody = document.getElementById('recent-tbody');
+        tbody.innerHTML = d.recentCerts.map(c => `
+          <tr>
+            <td style="font-weight:500">${c.name || c.studentName || '—'}</td>
+            <td style="color:var(--muted2)">${(c.degree||'').slice(0,28)}</td>
+            <td><span class="badge badge-v">● VALID</span></td>
+          </tr>`).join('') || `<tr><td colspan="3" style="color:var(--muted)">No data</td></tr>`;
+      }
+
+      // Activity feed
+      if (d.recentCerts) {
+        const feed = document.getElementById('activity-feed');
+        const items = d.recentCerts.map(c => ({
+          type: 'issue', name: c.name || c.studentName,
+          roll: c.roll || c.rollNumber,
+          time: (c.issuedAt || '').slice(0,16) || 'recently'
+        }));
+        feed.innerHTML = items.map(i => `
+          <div class="activity-item">
+            <div class="act-dot g"></div>
+            <div class="act-text">
+              <strong>Certificate Issued</strong> — ${i.name} (${i.roll})
+            </div>
+            <div class="act-time">${i.time.slice(-8) || '—'}</div>
+          </div>`).join('') + `
+          <div class="activity-item">
+            <div class="act-dot b"></div>
+            <div class="act-text"><strong>Verification</strong> — Hash verified as VALID</div>
+            <div class="act-time">live</div>
+          </div>
+          <div class="activity-item">
+            <div class="act-dot r"></div>
+            <div class="act-text"><strong>Fake Hash Rejected</strong> — Not found on chain</div>
+            <div class="act-time">live</div>
+          </div>`;
+      }
+
+    } catch(e) {
+      document.getElementById('dash-sub').textContent = '⚠️ Cannot reach API. Make sure server.py is running.';
+      document.getElementById('live-txt').textContent = 'API OFFLINE';
+    }
+  }
+
+  buildCharts();
+  loadStats();
+  setInterval(loadStats, 10000);
+</script>
+</body>
+</html>

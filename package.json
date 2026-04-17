@@ -1,0 +1,23 @@
+{
+  "name": "certificate-verification-blockchain",
+  "version": "1.0.0",
+  "description": "Blockchain-based Academic Certificate Verification System using Solidity Smart Contracts",
+  "main": "index.js",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "deploy:local": "hardhat run scripts/deploy.js --network localhost",
+    "node": "hardhat node",
+    "clean": "hardhat clean"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^4.0.0",
+    "hardhat": "^2.22.0"
+  },
+  "dependencies": {
+    "ethers": "^6.9.0"
+  },
+  "keywords": ["blockchain", "smart-contract", "certificate", "verification", "solidity"],
+  "author": "Your Team Name",
+  "license": "MIT"
+}

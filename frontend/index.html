@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>CertChain — Blockchain Certificate Verification</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg:       #060810;
+      --surface:  #0d1117;
+      --card:     #111827;
+      --border:   #1f2937;
+      --border2:  #374151;
+      --green:    #10b981;
+      --green2:   #34d399;
+      --blue:     #3b82f6;
+      --red:      #ef4444;
+      --yellow:   #f59e0b;
+      --text:     #f9fafb;
+      --muted:    #6b7280;
+      --muted2:   #9ca3af;
+      --mono:     'DM Mono', monospace;
+      --sans:     'Outfit', sans-serif;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Subtle grid */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image:
+        linear-gradient(rgba(16,185,129,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(16,185,129,0.04) 1px, transparent 1px);
+      background-size: 48px 48px;
+      pointer-events: none; z-index: 0;
+    }
+
+    /* Glow blobs */
+    .blob {
+      position: fixed;
+      border-radius: 50%;
+      filter: blur(120px);
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.15;
+    }
+    .blob-1 { width: 600px; height: 600px; background: var(--green); top: -200px; left: -200px; }
+    .blob-2 { width: 400px; height: 400px; background: var(--blue);  bottom: -100px; right: -100px; }
+
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 0 24px; position: relative; z-index: 1; }
+
+    /* ── Navbar ── */
+    nav {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(6,8,16,0.85);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+    }
+
+    .nav-inner {
+      max-width: 1100px; margin: 0 auto;
+      display: flex; align-items: center; justify-content: space-between;
+      height: 60px;
+    }
+
+    .nav-logo {
+      display: flex; align-items: center; gap: 10px;
+      font-size: 18px; font-weight: 800; color: var(--text);
+      text-decoration: none;
+    }
+
+    .logo-mark {
+      width: 34px; height: 34px;
+      background: var(--green);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+    }
+
+    .nav-logo span { color: var(--green); }
+
+    .nav-links {
+      display: flex; align-items: center; gap: 8px;
+    }
+
+    .nav-link {
+      padding: 7px 16px;
+      border-radius: 8px;
+      font-size: 14px; font-weight: 500;
+      color: var(--muted2);
+      text-decoration: none;
+      transition: all 0.2s;
+      cursor: pointer;
+      background: none; border: none;
+    }
+
+    .nav-link:hover { color: var(--text); background: var(--card); }
+    .nav-link.active { color: var(--text); background: var(--card); }
+
+    .nav-btn {
+      padding: 8px 18px;
+      background: var(--green);
+      color: #000;
+      border-radius: 8px;
+      font-size: 13px; font-weight: 700;
+      border: none; cursor: pointer;
+      transition: all 0.2s;
+      text-decoration: none;
+    }
+    .nav-btn:hover { background: var(--green2); transform: translateY(-1px); }
+
+    .status-dot {
+      display: flex; align-items: center; gap: 6px;
+      font-family: var(--mono); font-size: 11px;
+      color: var(--green);
+      background: rgba(16,185,129,0.1);
+      border: 1px solid rgba(16,185,129,0.2);
+      padding: 5px 12px; border-radius: 20px;
+    }
+
+    .pulse { width: 6px; height: 6px; background: var(--green); border-radius: 50%; animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.4;transform:scale(0.8)} }
+
+    /* ── Hero ── */
+    .hero {
+      padding: 80px 0 60px;
+      text-align: center;
+    }
+
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-family: var(--mono); font-size: 11px; letter-spacing: 2px;
+      color: var(--green); text-transform: uppercase;
+      border: 1px solid rgba(16,185,129,0.3);
+      padding: 6px 16px; border-radius: 20px;
+      margin-bottom: 28px;
+      background: rgba(16,185,129,0.05);
+    }
+
+    .hero h1 {
+      font-size: clamp(36px, 6vw, 68px);
+      font-weight: 900;
+      line-height: 1.05;
+      letter-spacing: -2px;
+      margin-bottom: 20px;
+    }
+
+    .hero h1 .line2 {
+      background: linear-gradient(135deg, var(--green) 0%, #06b6d4 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .hero p {
+      font-size: 17px; color: var(--muted2);
+      max-width: 520px; margin: 0 auto 36px;
+      line-height: 1.7; font-weight: 400;
+    }
+
+    .hero-actions {
+      display: flex; align-items: center; justify-content: center; gap: 12px;
+      margin-bottom: 60px;
+    }
+
+    .btn-primary {
+      padding: 13px 28px;
+      background: var(--green);
+      color: #000; font-weight: 700; font-size: 15px;
+      border: none; border-radius: 10px; cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-primary:hover { background: var(--green2); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(16,185,129,0.3); }
+
+    .btn-outline {
+      padding: 13px 28px;
+      background: transparent;
+      color: var(--text); font-weight: 600; font-size: 15px;
+      border: 1px solid var(--border2); border-radius: 10px; cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-outline:hover { border-color: var(--green); color: var(--green); }
+
+    /* ── Stats row ── */
+    .stats-row {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;
+      margin-bottom: 64px;
+    }
+
+    .stat {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px; padding: 24px;
+      transition: border-color 0.3s, transform 0.2s;
+    }
+
+    .stat:hover { border-color: var(--border2); transform: translateY(-2px); }
+
+    .stat-val {
+      font-family: var(--mono);
+      font-size: 34px; font-weight: 500;
+      color: var(--green); display: block; margin-bottom: 6px;
+    }
+
+    .stat-val.blue { color: var(--blue); }
+    .stat-val.yellow { color: var(--yellow); }
+    .stat-val.red { color: var(--red); }
+
+    .stat-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+    .stat-sub { font-size: 11px; color: var(--green); margin-top: 4px; font-family: var(--mono); }
+
+    /* ── Section ── */
+    .section { margin-bottom: 64px; }
+
+    .section-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 24px;
+    }
+
+    .section-title {
+      font-size: 22px; font-weight: 700; letter-spacing: -0.5px;
+      display: flex; align-items: center; gap: 10px;
+    }
+
+    .section-title::before {
+      content: '';
+      width: 4px; height: 22px;
+      background: var(--green); border-radius: 2px;
+    }
+
+    /* ── Main grid ── */
+    .main-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 24px;
+    }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px; padding: 28px;
+      transition: border-color 0.2s;
+    }
+
+    .card:hover { border-color: var(--border2); }
+
+    .card-title {
+      font-size: 16px; font-weight: 700;
+      margin-bottom: 20px;
+      display: flex; align-items: center; gap: 10px;
+    }
+
+    .card-icon {
+      width: 36px; height: 36px;
+      border-radius: 9px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+    }
+
+    .card-icon.green { background: rgba(16,185,129,0.15); }
+    .card-icon.blue  { background: rgba(59,130,246,0.15); }
+    .card-icon.red   { background: rgba(239,68,68,0.15); }
+
+    /* ── Form ── */
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px; }
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
+    .form-group.full { grid-column: 1 / -1; }
+
+    label {
+      font-size: 11px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 1px;
+      color: var(--muted2);
+    }
+
+    input, select, textarea {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      padding: 11px 14px;
+      color: var(--text);
+      font-family: var(--sans); font-size: 14px;
+      transition: border-color 0.2s;
+      outline: none;
+    }
+
+    input:focus, select:focus, textarea:focus { border-color: var(--green); }
+    input::placeholder { color: var(--muted); }
+    select option { background: var(--card); }
+
+    .btn-full {
+      width: 100%; padding: 13px;
+      background: var(--green); color: #000;
+      font-family: var(--sans); font-size: 14px; font-weight: 700;
+      border: none; border-radius: 10px; cursor: pointer;
+      transition: all 0.2s; letter-spacing: 0.3px;
+    }
+
+    .btn-full:hover { background: var(--green2); transform: translateY(-1px); }
+    .btn-full:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+    .btn-full.blue { background: var(--blue); }
+    .btn-full.blue:hover { background: #60a5fa; }
+
+    /* ── Hash input ── */
+    .hash-input-wrap { position: relative; margin-bottom: 16px; }
+    .hash-input-wrap input { padding-right: 80px; font-family: var(--mono); font-size: 12px; }
+    .paste-btn {
+      position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+      background: var(--border2); color: var(--muted2);
+      border: none; border-radius: 6px;
+      font-size: 11px; padding: 5px 10px; cursor: pointer;
+      transition: all 0.2s; font-family: var(--sans);
+    }
+    .paste-btn:hover { background: var(--border); color: var(--text); }
+
+    /* ── Result box ── */
+    .result-box {
+      border-radius: 12px; padding: 18px 20px;
+      margin-top: 16px; display: none;
+      animation: fadeUp 0.3s ease;
+    }
+
+    @keyframes fadeUp {
+      from { opacity:0; transform: translateY(10px); }
+      to   { opacity:1; transform: translateY(0); }
+    }
+
+    .result-box.valid   { background: rgba(16,185,129,0.08); border: 1px solid rgba(16,185,129,0.25); }
+    .result-box.invalid { background: rgba(239,68,68,0.08);  border: 1px solid rgba(239,68,68,0.25); }
+    .result-box.info    { background: rgba(59,130,246,0.08);  border: 1px solid rgba(59,130,246,0.25); }
+
+    .result-status { font-size: 16px; font-weight: 800; margin-bottom: 12px; }
+    .result-box.valid   .result-status { color: var(--green); }
+    .result-box.invalid .result-status { color: var(--red); }
+    .result-box.info    .result-status { color: var(--blue); }
+
+    .result-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+    .result-item label { display: block; font-size: 10px; color: var(--muted); margin-bottom: 2px; letter-spacing: 1px; text-transform: uppercase; }
+    .result-item span  { font-size: 13px; color: var(--text); font-weight: 500; }
+
+    .hash-copy {
+      font-family: var(--mono); font-size: 11px;
+      color: var(--blue); word-break: break-all;
+      background: rgba(59,130,246,0.08);
+      border: 1px solid rgba(59,130,246,0.2);
+      border-radius: 8px; padding: 10px 12px;
+      margin-top: 12px; cursor: pointer;
+      transition: background 0.2s;
+    }
+    .hash-copy:hover { background: rgba(59,130,246,0.15); }
+
+    /* ── Cert table ── */
+    .cert-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .cert-table th {
+      text-align: left; padding: 10px 14px;
+      font-size: 10px; text-transform: uppercase; letter-spacing: 1px;
+      color: var(--muted); border-bottom: 1px solid var(--border);
+      font-weight: 600;
+    }
+    .cert-table td {
+      padding: 13px 14px;
+      border-bottom: 1px solid rgba(31,41,55,0.6);
+      vertical-align: middle;
+    }
+    .cert-table tr:last-child td { border-bottom: none; }
+    .cert-table tr:hover td { background: rgba(255,255,255,0.02); }
+
+    .mono-hash { font-family: var(--mono); font-size: 11px; color: var(--blue); }
+
+    .badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 3px 10px; border-radius: 20px;
+      font-size: 11px; font-weight: 700; letter-spacing: 0.3px;
+    }
+    .badge-valid   { background: rgba(16,185,129,0.15); color: var(--green); }
+    .badge-invalid { background: rgba(239,68,68,0.15);  color: var(--red); }
+
+    .copy-hash-btn {
+      background: none; border: 1px solid var(--border);
+      border-radius: 5px; color: var(--muted);
+      font-size: 10px; padding: 3px 8px;
+      cursor: pointer; margin-left: 6px;
+      transition: all 0.2s; font-family: var(--mono);
+    }
+    .copy-hash-btn:hover { border-color: var(--blue); color: var(--blue); }
+
+    /* ── Loader ── */
+    .loader {
+      display: inline-block; width: 14px; height: 14px;
+      border: 2px solid rgba(0,0,0,0.2);
+      border-top-color: #000;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin-right: 8px; vertical-align: middle;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed; bottom: 28px; right: 28px; z-index: 9999;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 12px; padding: 14px 20px;
+      font-size: 14px; font-weight: 500;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+      transform: translateY(80px); opacity: 0;
+      transition: all 0.3s ease; pointer-events: none;
+      display: flex; align-items: center; gap: 10px;
+    }
+    #toast.show { transform: translateY(0); opacity: 1; }
+    #toast.success { border-color: rgba(16,185,129,0.4); }
+    #toast.error   { border-color: rgba(239,68,68,0.4); }
+
+    /* ── Footer ── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 32px 0; text-align: center;
+      color: var(--muted); font-size: 13px;
+      margin-top: 32px;
+    }
+    footer strong { color: var(--green); }
+
+    /* ── API Status bar ── */
+    .api-bar {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 12px; padding: 14px 20px;
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 32px; font-size: 13px;
+    }
+    .api-info { display: flex; align-items: center; gap: 16px; color: var(--muted2); }
+    .api-val  { font-family: var(--mono); color: var(--text); font-size: 12px; }
+
+    @media(max-width:768px) {
+      .main-grid   { grid-template-columns: 1fr; }
+      .stats-row   { grid-template-columns: 1fr 1fr; }
+      .form-grid   { grid-template-columns: 1fr; }
+      .result-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="blob blob-1"></div>
+<div class="blob blob-2"></div>
+
+<!-- Navbar -->
+<nav>
+  <div class="nav-inner">
+    <a href="#" class="nav-logo">
+      <div class="logo-mark">🔗</div>
+      Cert<span>Chain</span>
+    </a>
+    <div class="nav-links">
+      <button class="nav-link active" onclick="scrollTo('issue')">Issue</button>
+      <button class="nav-link" onclick="scrollTo('verify')">Verify</button>
+      <button class="nav-link" onclick="scrollTo('records')">Records</button>
+      <a href="dashboard.html" class="nav-btn">📊 Dashboard</a>
+    </div>
+    <div class="status-dot" id="nav-status">
+      <div class="pulse"></div>
+      <span id="nav-status-text">Connecting...</span>
+    </div>
+  </div>
+</nav>
+
+<!-- Hero -->
+<div class="wrap">
+  <section class="hero">
+    <div class="hero-badge">⛓️ &nbsp; Powered by Ethereum Smart Contracts</div>
+    <h1>
+      Academic Certificates<br/>
+      <span class="line2">On The Blockchain</span>
+    </h1>
+    <p>Issue tamper-proof credentials and verify authenticity in milliseconds. No central authority. No forgery. Forever on-chain.</p>
+    <div class="hero-actions">
+      <button class="btn-primary" onclick="scrollTo('issue')">Issue Certificate</button>
+      <button class="btn-outline" onclick="scrollTo('verify')">Verify a Certificate</button>
+    </div>
+  </section>
+
+  <!-- API Status bar -->
+  <div class="api-bar" id="api-bar">
+    <div class="api-info">
+      <span>🔗 Contract: <span class="api-val" id="api-contract">Loading...</span></span>
+      <span>⛓️ Block: <span class="api-val" id="api-block">—</span></span>
+      <span>📊 Issued: <span class="api-val" id="api-issued">—</span></span>
+      <span>✅ Verified: <span class="api-val" id="api-verified">—</span></span>
+    </div>
+    <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">Hardhat Local · Chain 1337</span>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-row">
+    <div class="stat">
+      <span class="stat-val" id="st-issued">—</span>
+      <div class="stat-label">Certificates Issued</div>
+      <div class="stat-sub" id="st-issued-sub">Loading...</div>
+    </div>
+    <div class="stat">
+      <span class="stat-val blue" id="st-verified">—</span>
+      <div class="stat-label">Verifications Done</div>
+      <div class="stat-sub" style="color:var(--blue)" id="st-verified-sub">Loading...</div>
+    </div>
+    <div class="stat">
+      <span class="stat-val yellow">98.4%</span>
+      <div class="stat-label">Integrity Rate</div>
+      <div class="stat-sub" style="color:var(--yellow)">↔ Stable</div>
+    </div>
+    <div class="stat">
+      <span class="stat-val" id="st-block">—</span>
+      <div class="stat-label">Current Block</div>
+      <div class="stat-sub" id="st-block-sub">Live chain</div>
+    </div>
+  </div>
+
+  <!-- Issue + Verify side by side -->
+  <div class="main-grid section" id="issue">
+
+    <!-- Issue Card -->
+    <div class="card">
+      <div class="card-title">
+        <div class="card-icon green">📜</div>
+        Issue New Certificate
+      </div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Student Full Name</label>
+          <input type="text" id="i-name" placeholder="e.g. Arjun Sharma"/>
+        </div>
+        <div class="form-group">
+          <label>Roll Number</label>
+          <input type="text" id="i-roll" placeholder="e.g. CS2021001"/>
+        </div>
+        <div class="form-group">
+          <label>Degree / Course</label>
+          <input type="text" id="i-degree" placeholder="e.g. B.Tech Computer Science"/>
+        </div>
+        <div class="form-group">
+          <label>Institution</label>
+          <input type="text" id="i-inst" placeholder="e.g. XYZ Institute of Technology"/>
+        </div>
+      </div>
+      <button class="btn-full" id="issue-btn" onclick="issueCert()">
+        ⛓️ Issue on Blockchain
+      </button>
+      <div class="result-box" id="issue-result"></div>
+    </div>
+
+    <!-- Verify Card -->
+    <div class="card" id="verify">
+      <div class="card-title">
+        <div class="card-icon blue">🔍</div>
+        Verify Certificate
+      </div>
+      <div style="margin-bottom:16px;font-size:13px;color:var(--muted2);line-height:1.6;">
+        Enter the certificate hash to verify authenticity on-chain. The hash is stored immutably — any tampering makes it invalid.
+      </div>
+      <label style="display:block;margin-bottom:6px;">Certificate Hash (0x...)</label>
+      <div class="hash-input-wrap">
+        <input type="text" id="v-hash" placeholder="0xabc123def456..." />
+        <button class="paste-btn" onclick="pasteHash()">Paste</button>
+      </div>
+      <button class="btn-full blue" id="verify-btn" onclick="verifyCert()">
+        🔍 Verify on Blockchain
+      </button>
+      <div class="result-box" id="verify-result"></div>
+    </div>
+  </div>
+
+  <!-- Records Table -->
+  <div class="section" id="records">
+    <div class="section-header">
+      <div class="section-title">All Issued Certificates</div>
+      <button class="btn-outline" style="padding:8px 16px;font-size:13px;" onclick="loadCerts()">↻ Refresh</button>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden;">
+      <table class="cert-table">
+        <thead>
+          <tr>
+            <th>Student Name</th>
+            <th>Roll No.</th>
+            <th>Degree</th>
+            <th>Issued</th>
+            <th>Hash</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="cert-tbody">
+          <tr><td colspan="6" style="text-align:center;color:var(--muted);padding:32px;">Loading from blockchain...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div><!-- /wrap -->
+
+<footer>
+  <div class="wrap">
+    <strong>CertChain</strong> — Blockchain-Based Academic Certificate Verification &nbsp;|&nbsp;
+    Built with <strong>Solidity</strong> · <strong>Hardhat</strong> · <strong>Flask</strong> · <strong>web3.py</strong>
+    &nbsp;|&nbsp; 2025
+  </div>
+</footer>
+
+<div id="toast"></div>
+
+<script>
+  const API = "http://localhost:5000/api";
+
+  // ── Utilities ──────────────────────────────────────────────────────────────
+  function scrollTo(id) {
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function toast(msg, type = 'success') {
+    const el = document.getElementById('toast');
+    el.innerHTML = (type === 'success' ? '✅' : '❌') + ' ' + msg;
+    el.className = `show ${type}`;
+    setTimeout(() => el.className = '', 3000);
+  }
+
+  function setLoading(btnId, loading, text) {
+    const btn = document.getElementById(btnId);
+    btn.disabled = loading;
+    btn.innerHTML = loading ? `<span class="loader"></span>${text}` : text;
+  }
+
+  async function copyText(text) {
+    try { await navigator.clipboard.writeText(text); toast('Copied to clipboard!'); }
+    catch { toast('Copy failed', 'error'); }
+  }
+
+  async function pasteHash() {
+    try {
+      const text = await navigator.clipboard.readText();
+      document.getElementById('v-hash').value = text.trim();
+    } catch { toast('Paste from clipboard failed', 'error'); }
+  }
+
+  // ── Load health/stats ──────────────────────────────────────────────────────
+  async function loadHealth() {
+    try {
+      const r = await fetch(`${API}/health`);
+      const d = await r.json();
+      if (d.status === 'ok') {
+        document.getElementById('nav-status-text').textContent = 'Blockchain Live';
+        document.getElementById('api-contract').textContent =
+          d.contractAddress.slice(0,10) + '...' + d.contractAddress.slice(-6);
+        document.getElementById('api-block').textContent = d.blockNumber;
+        document.getElementById('api-issued').textContent = d.totalIssued;
+        document.getElementById('api-verified').textContent = d.totalVerified;
+        document.getElementById('st-issued').textContent = d.totalIssued;
+        document.getElementById('st-verified').textContent = d.totalVerified;
+        document.getElementById('st-block').textContent = '#' + d.blockNumber;
+        document.getElementById('st-issued-sub').textContent = '↑ On-chain';
+        document.getElementById('st-verified-sub').textContent = '↑ Live count';
+      }
+    } catch {
+      document.getElementById('nav-status-text').textContent = 'API Offline';
+      document.getElementById('nav-status').style.background = 'rgba(239,68,68,0.1)';
+      document.getElementById('nav-status').style.borderColor = 'rgba(239,68,68,0.3)';
+      document.getElementById('nav-status').style.color = 'var(--red)';
+      document.querySelector('.pulse').style.background = 'var(--red)';
+    }
+  }
+
+  // ── Load certificates table ────────────────────────────────────────────────
+  async function loadCerts() {
+    const tbody = document.getElementById('cert-tbody');
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:32px;">Loading...</td></tr>`;
+    try {
+      const r = await fetch(`${API}/certificates`);
+      const d = await r.json();
+      if (!d.success || !d.certificates.length) {
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:32px;">No certificates found.</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = d.certificates.map(c => {
+        const short = c.hash ? c.hash.slice(0,12) + '...' + c.hash.slice(-6) : '—';
+        const date  = c.issueDate ? c.issueDate.split(' ')[0] : (c.issuedAt || '—').slice(0,10);
+        return `<tr>
+          <td style="font-weight:500">${c.name || c.studentName}</td>
+          <td style="font-family:var(--mono);font-size:12px">${c.roll || c.rollNumber}</td>
+          <td>${c.degree}</td>
+          <td style="font-family:var(--mono);font-size:12px;color:var(--muted2)">${date}</td>
+          <td>
+            <span class="mono-hash">${short}</span>
+            <button class="copy-hash-btn" onclick="copyAndVerify('${c.hash}')">copy+verify</button>
+          </td>
+          <td><span class="badge ${c.isValid !== false ? 'badge-valid' : 'badge-invalid'}">${c.isValid !== false ? '● VALID' : '● REVOKED'}</span></td>
+        </tr>`;
+      }).join('');
+    } catch {
+      tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--red);padding:32px;">⚠️ API not reachable. Make sure server.py is running.</td></tr>`;
+    }
+  }
+
+  function copyAndVerify(hash) {
+    document.getElementById('v-hash').value = hash;
+    scrollTo('verify');
+    copyText(hash);
+  }
+
+  // ── Issue certificate ──────────────────────────────────────────────────────
+  async function issueCert() {
+    const name   = document.getElementById('i-name').value.trim();
+    const roll   = document.getElementById('i-roll').value.trim();
+    const degree = document.getElementById('i-degree').value.trim();
+    const inst   = document.getElementById('i-inst').value.trim();
+
+    if (!name || !roll || !degree || !inst) {
+      toast('Please fill in all fields', 'error'); return;
+    }
+
+    setLoading('issue-btn', true, 'Issuing on blockchain...');
+    const resultEl = document.getElementById('issue-result');
+    resultEl.style.display = 'none';
+
+    try {
+      const r = await fetch(`${API}/certificates/issue`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentName: name, rollNumber: roll, degree, institution: inst })
+      });
+      const d = await r.json();
+
+      if (d.success) {
+        resultEl.className = 'result-box info';
+        resultEl.innerHTML = `
+          <div class="result-status">✅ Certificate Issued Successfully!</div>
+          <div class="result-grid">
+            <div class="result-item"><label>Student</label><span>${name}</span></div>
+            <div class="result-item"><label>Roll No</label><span>${roll}</span></div>
+            <div class="result-item"><label>Block</label><span>#${d.blockNumber}</span></div>
+            <div class="result-item"><label>Gas Used</label><span>${d.gasUsed}</span></div>
+          </div>
+          <div class="hash-copy" onclick="copyText('${d.certHash}')">
+            🔑 Certificate Hash (click to copy):<br/>${d.certHash}
+          </div>`;
+        resultEl.style.display = 'block';
+        toast(`Certificate issued for ${name}!`);
+        ['i-name','i-roll','i-degree','i-inst'].forEach(id => document.getElementById(id).value = '');
+        setTimeout(() => { loadHealth(); loadCerts(); }, 1000);
+      } else {
+        resultEl.className = 'result-box invalid';
+        resultEl.innerHTML = `<div class="result-status">❌ Failed</div><div style="color:var(--muted2);font-size:13px">${d.error}</div>`;
+        resultEl.style.display = 'block';
+        toast(d.error, 'error');
+      }
+    } catch {
+      resultEl.className = 'result-box invalid';
+      resultEl.innerHTML = `<div class="result-status">❌ API not reachable</div><div style="color:var(--muted2);font-size:13px">Make sure server.py is running on port 5000.</div>`;
+      resultEl.style.display = 'block';
+      toast('Cannot reach API server', 'error');
+    } finally {
+      setLoading('issue-btn', false, '⛓️ Issue on Blockchain');
+    }
+  }
+
+  // ── Verify certificate ─────────────────────────────────────────────────────
+  async function verifyCert() {
+    const hash = document.getElementById('v-hash').value.trim();
+    if (!hash) { toast('Please enter a certificate hash', 'error'); return; }
+
+    setLoading('verify-btn', true, 'Checking blockchain...');
+    const resultEl = document.getElementById('verify-result');
+    resultEl.style.display = 'none';
+
+    try {
+      const r = await fetch(`${API}/certificates/verify/${encodeURIComponent(hash)}`);
+      const d = await r.json();
+
+      if (!d.success) throw new Error(d.error);
+
+      if (d.found && d.isValid) {
+        resultEl.className = 'result-box valid';
+        resultEl.innerHTML = `
+          <div class="result-status">✅ CERTIFICATE VALID</div>
+          <div class="result-grid">
+            <div class="result-item"><label>Student Name</label><span>${d.studentName}</span></div>
+            <div class="result-item"><label>Roll Number</label><span>${d.rollNumber}</span></div>
+            <div class="result-item"><label>Degree</label><span>${d.degree}</span></div>
+            <div class="result-item"><label>Institution</label><span>${d.institution}</span></div>
+            <div class="result-item"><label>Issue Date</label><span>${d.issueDate}</span></div>
+            <div class="result-item"><label>Status</label><span style="color:var(--green)">● Active on Chain</span></div>
+          </div>`;
+      } else if (d.found && !d.isValid) {
+        resultEl.className = 'result-box invalid';
+        resultEl.innerHTML = `
+          <div class="result-status">⚠️ CERTIFICATE REVOKED</div>
+          <div style="font-size:13px;color:var(--muted2)">This certificate exists but has been revoked by the issuing authority.</div>
+          <div class="result-grid" style="margin-top:12px">
+            <div class="result-item"><label>Student</label><span>${d.studentName}</span></div>
+            <div class="result-item"><label>Roll No</label><span>${d.rollNumber}</span></div>
+          </div>`;
+      } else {
+        resultEl.className = 'result-box invalid';
+        resultEl.innerHTML = `
+          <div class="result-status">❌ CERTIFICATE NOT FOUND</div>
+          <div style="font-size:13px;color:var(--muted2);line-height:1.6;">
+            No certificate with this hash exists on the blockchain.<br/>
+            This document may be <strong style="color:var(--red)">FRAUDULENT</strong> or the hash is incorrect.
+          </div>`;
+      }
+      resultEl.style.display = 'block';
+    } catch (e) {
+      resultEl.className = 'result-box invalid';
+      resultEl.innerHTML = `<div class="result-status">❌ Error</div><div style="color:var(--muted2);font-size:13px">${e.message}</div>`;
+      resultEl.style.display = 'block';
+    } finally {
+      setLoading('verify-btn', false, '🔍 Verify on Blockchain');
+    }
+  }
+
+  // Enter key on hash field
+  document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('v-hash')?.addEventListener('keydown', e => {
+      if (e.key === 'Enter') verifyCert();
+    });
+    loadHealth();
+    loadCerts();
+    setInterval(loadHealth, 10000); // refresh every 10s
+  });
+</script>
+</body>
+</html>
